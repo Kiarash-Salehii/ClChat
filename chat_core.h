@@ -43,8 +43,8 @@ extern "C"
 		uint8_t is_room_locked;
 		uint8_t is_private_ip;
 	} chat_setup_t;
-	typedef struct chat* chat_t;
-	typedef struct chat_room* chat_room_t;
+	typedef char* chat_t;
+	typedef char* chat_room_t;
 	void create_chat(chat_t* chat);
 	void destroy_chat(chat_t chat);
 	chat_room_t setup_room(chat_t chat, chat_setup_t* setup_setting);

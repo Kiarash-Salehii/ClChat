@@ -20,7 +20,7 @@ static void ensure_init(void)
     }
 }
 
-static int get_str(char buffer[], int count, key_t* escapers, int escapers_count)
+static int get_str(char buffer[], int count, _key_t* escapers, int escapers_count)
 {
     if (count <= 0) return 0;
     int index = 0;
@@ -42,6 +42,7 @@ static int get_str(char buffer[], int count, key_t* escapers, int escapers_count
             if (escapers[i] == key)
             {
                 buffer[index] = '\0';
+                logger_printf("\n");
                 return index;
             }
         }
@@ -66,7 +67,7 @@ static int get_str(char buffer[], int count, key_t* escapers, int escapers_count
             {
                 buffer[index++] = (char)key;
                 buffer[index] = '\0';
-                printf("%c", (char)key);
+                logger_printf("%c", (char)key);
             }
             else
             {
@@ -158,7 +159,7 @@ void logger_vprintf(const char* fmt, va_list vl)
     if (buf != stackbuf) free(buf);
 }
 
-char* logger_prompt_gets(char* buf, size_t bufsize, key_t* terminater_keys, size_t terminater_keys_len, const char* prompt_fmt, ...)
+char* logger_prompt_gets(char* buf, size_t bufsize, _key_t* terminater_keys, size_t terminater_keys_len, const char* prompt_fmt, ...)
 {
     ensure_init();
 
@@ -351,13 +352,13 @@ int log_time_printf(const char* const fmt, const char* timeFormat, ...)
     int needed = vsnprintf(stackbuf, sizeof(stackbuf), fmt, ap);
     va_end(ap);
 
-    if (needed < 0) return;
+    if (needed < 0) return -1;
     if ((size_t)needed >= sizeof(stackbuf))
     {
         /* allocate larger buffer */
         size_t sz = (size_t)needed + 1;
         buf = (char*)malloc(sz);
-        if (!buf) return;
+        if (!buf) return -1;
         va_start(ap, fmt);
         vsnprintf(buf, sz, fmt, ap);
         va_end(ap);

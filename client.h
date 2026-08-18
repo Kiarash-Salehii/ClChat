@@ -18,14 +18,15 @@
 #include "console.h"
 #include "terminal.h"
 #include "logger.h"
+#include "console.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int get_str(char buffer[], int count, key_t* escapers, int escapers_count);
+int get_str(char buffer[], int count, _key_t* escapers, int escapers_count);
 void clear_line();
-int create_server(void);
+int client_connect(void);
 
 #ifdef __cplusplus
 }

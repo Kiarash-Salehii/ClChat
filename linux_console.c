@@ -47,7 +47,7 @@ int console_key_available(void)
                   &tv) > 0;
 }
 
-int console_read_key(void)
+_key_t console_read_key(void)
 {
     unsigned char ch;
 
@@ -55,6 +55,12 @@ int console_read_key(void)
         return -1;
 
     return ch;
+}
+
+_key_t console_poll_key(void)
+{
+	if(console_key_available())
+		return console_read_key();
 }
 
 #endif

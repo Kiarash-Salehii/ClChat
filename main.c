@@ -3,7 +3,7 @@
 
 #include <signal.h>
 
-int get_str(char buffer[], int count, key_t* escapers, int escapers_count)
+int get_str(char buffer[], int count, _key_t* escapers, int escapers_count)
 {
 	if (count <= 0) return 0;
 	int index = 0;
@@ -119,8 +119,14 @@ void termination_signal(int sig)
 	exit(sig);
 }
 
-int main(void)
+void segment_signal(int sig)
 {
+	
+}
+
+int main(int argc, char **args)
+{
+
 	if (logger_init() != 0)
 	{
 		fprintf(stderr, "Failed to initialize logger\n");
@@ -139,20 +145,28 @@ int main(void)
 	}
 
 	signal(SIGINT, termination_signal);
+	signal(SIGSEGV, segment_signal);
 
+#ifndef _WIN32
+
+#endif
+
+	_key_t escape_key[] = { '\r', '\n' };
 	uint8_t exit = 0;
 	while(!exit)
 	{
-		print_highlighted("Hello and welcome to clchat.\n\
+		char service_selected[10];
+		logger_prompt_gets(service_selected, sizeof(service_selected), escape_key, 2, "Hello and welcome to clchat.\n\
 	Here you can create your own server and have your friend connect to you\n\
 	Or you can have your friend became the server and easily connect throw the code that he/she gave u\n\
 	1 - Connect to a room\n\
 	2 - Create a room\n\
-	choose an service and then press enter to continue : ", CLR_BG_BLACK);
-		int service_selected;
-		(void)scanf("%d", &service_selected);
+	choose an service and then press enter to continue : ");
+		
+		int service_num;
+		(void)sscanf(service_selected, "%d", &service_num);
 		terminal_clear();
-		if (service_selected == 1)
+		if (service_num == 1)
 		{
 			if (client_connect() < 0)
 			{
@@ -160,7 +174,7 @@ int main(void)
 				exit = 1;
 			}
 		}
-		else if (service_selected == 2)
+		else if (service_num == 2)
 		{
 			if (create_server() < 0)
 			{
@@ -170,7 +184,7 @@ int main(void)
 		}
 		else
 		{
-			logger_printf("invalid input.\n");
+			logger_printf("invalid input. %s\n", service_selected);
 			exit = 1;
 		}
 	}

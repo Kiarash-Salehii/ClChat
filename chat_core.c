@@ -27,7 +27,7 @@ void create_chat(chat_t* chat)
 	{
 		return;
 	}
-	*chat = (chat_t*)_chat;
+	memcpy(chat, _chat, sizeof(void*));
 #ifdef _CHAT_WINDOWS_
 	int wsas = WSAStartup(MAKEWORD(2, 2), &wsa_data);
 #endif
@@ -118,7 +118,7 @@ chat_room_t setup_room(chat_t _chat, chat_setup_t* setup_setting)
 
 int chat_accept_user(chat_room_t _room)
 {
-	_chat_room_t* room = _room;
+	_chat_room_t* room = (_chat_room_t*)_room;
 	int client = (int)accept(room->server, 0, 0);
 	if (client < 0)
 	{
@@ -153,7 +153,7 @@ void chat_kick_by_sock(int user)
 
 void chat_kick_users(chat_room_t _room)
 {
-	_chat_room_t* room = _room;
+	_chat_room_t* room = (_chat_room_t*)_room;
 	for (uint32_t i = 0; i < room->client_len; i++)
 	{
 		closesocket(room->clients[i]);

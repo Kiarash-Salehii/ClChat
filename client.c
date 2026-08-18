@@ -51,7 +51,7 @@ void client_sender_thread_call(void* arg)
 	print_color("1- [c]hat.\n2- send [f]ile.\n3- send [i]mage.\n4- [q]uit.\n", CLR_BLUE, CLR_BG_BLACK);
 
 	char buffer[2048];
-	key_t escaper_key[] = { '\n', KEY_ESCAPE, '\r' };
+	_key_t escaper_key[] = { '\n', KEY_ESCAPE, '\r' };
 	while (1)
 	{
 		mutex_lock(&client_mutex);
@@ -213,7 +213,7 @@ void client_sender_thread_call(void* arg)
 			}
 			case 'q':
 			{
-				key_t termins[] = { '\n', '\r' };
+				_key_t termins[] = { '\n', '\r' };
 				char stack_buf[3];
 				logger_prompt_gets(stack_buf, sizeof(stack_buf), termins, 2, "Are you sure to quit chat? (Y/N) ");
 				if (tolower(*stack_buf) == 'n') break;
@@ -360,7 +360,7 @@ int client_connect(void)
 	thread_wrap_data.user_id = user_id;
 	thread_wrap_data.username = username;
 	thread_t sender_thread;
-	thread_begin(&sender_thread, client_sender_thread_call, 1, &thread_wrap_data);
+	thread_begin(&sender_thread, (THREADCALLBACK)client_sender_thread_call, 1, &thread_wrap_data);
 	packet_t packet;
 	memset(&packet, 0, sizeof(packet));
 	rewind(stdin);

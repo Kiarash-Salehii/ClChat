@@ -1,5 +1,8 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 #define HTTP_CLIENT_LIB
 #include "chat_core.h"
 
@@ -42,7 +45,7 @@ void http_connect(http_client_t* client, const char* domain, unsigned short port
 	if (sock < 0)
 	{
 		printf("Could not connect.\n");
-		return 1;
+		return;
 	}
 
 	struct sockaddr* addr = p->ai_addr;
@@ -70,12 +73,12 @@ void http_connect_by_ip(http_client_t* client, const char* ip, unsigned short po
 	addr.sin_family = AF_INET;
 	addr.sin_port = port;
 	inet_pton(AF_INET, ip, &addr.sin_addr);
-	connect(sock, &addr, sizeof(addr));
+	connect(sock, (const struct sockaddr *)&addr, sizeof(addr));
 
 	if (sock < 0)
 	{
 		printf("Could not connect.\n");
-		return 1;
+		return;
 	}
 
 	client->ip_address = *(uint32_t*)&addr.sin_addr;
@@ -106,7 +109,7 @@ void http_get(http_client_t* client, const char* get)
 	{
 		perror("send");
 		closesocket(client->sock);
-		return 1;
+		return;
 	}
 
 	free(request);
@@ -146,7 +149,7 @@ void http_send(http_client_t* client, const char* message, size_t messsage_len)
 	{
 		perror("send");
 		closesocket(client->sock);
-		return 1;
+		return;
 	}
 }
 

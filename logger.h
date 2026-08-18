@@ -52,7 +52,7 @@ void logger_vprintf(const char* fmt, va_list vl);
 
     /* Thread-safe prompt + read. Prints the formatted prompt, flushes,
        then reads into buf using fgets while holding the console lock. */
-char* logger_prompt_gets(char* buf, size_t bufsize, key_t* terminater_keys, size_t terminater_keys_len, const char* prompt_fmt, ...);
+char* logger_prompt_gets(char* buf, size_t bufsize, _key_t* terminater_keys, size_t terminater_keys_len, const char* prompt_fmt, ...);
 
     /*
     *

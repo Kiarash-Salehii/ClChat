@@ -97,7 +97,7 @@ typedef struct
 	uint8_t* room_alive;
 } server_thread_wraper_t;
 
-mutex_t server_mutex;
+static mutex_t server_mutex;
 
 static void server_reciver_thread_call(void* arg)
 {
@@ -323,7 +323,7 @@ static void server_sender_thread_call(void* arg)
 	print_color("1- [c]hat.\n2- send [f]ile.\n3- send [i]mage.\n4- [q]uit.\n", CLR_BLUE, CLR_BG_BLACK);
 
 	char buffer[2048];
-	key_t escaper_key[] = { '\n', KEY_ESCAPE, '\r' };
+	_key_t escaper_key[] = { '\n', KEY_ESCAPE, '\r' };
 	while (1)
 	{
 		mutex_lock(&server_mutex);
@@ -334,12 +334,14 @@ static void server_sender_thread_call(void* arg)
 		}
 		mutex_unlock(&server_mutex);
 
+		logger_printf("sender thread running.\n")
 		print_color("choose an option : \r", CLR_BLUE, CLR_BG_BLACK);
 		fflush(stdout);
-		key_t key;
+		_key_t key;
 
 		if (key = console_poll_key())
 		{
+			logger_printf("Key pressed.\n");
 			mutex_lock(&server_mutex);
 				uint32_t user_count_snapshot = *wrap->user_count;
 				user_t* users_snapshot = *wrap->users;
@@ -362,7 +364,7 @@ static void server_sender_thread_call(void* arg)
 			{
 			case 'c':
 			{
-				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(key_t));
+				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(_key_t));
 				logger_printf("\n");
 
 				/* strip newline */
@@ -378,7 +380,7 @@ static void server_sender_thread_call(void* arg)
 			{
 				/* unchanged file-read logic up to packet construction (kept original behavior) */
 				logger_printf("\rgive the path to the file you wanna send : ");
-				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(key_t));
+				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(_key_t));
 				logger_printf("\n");
 
 				char file_name[2048];
@@ -403,7 +405,7 @@ static void server_sender_thread_call(void* arg)
 					continue;
 				}
 
-				packet_send_file(socket, user_count_snapshot, 0, file, file_name, filename_len, 1, FILE_STREAMING_BUFFER_SIZE);
+				packet_send_file(sockets, user_count_snapshot, 0, file, file_name, filename_len, 1, FILE_STREAMING_BUFFER_SIZE);
 				//fseek(file, 0, SEEK_END);
 				//size_t file_size = ftell(file);
 				//rewind(file);
@@ -442,7 +444,7 @@ static void server_sender_thread_call(void* arg)
 			{
 				/* similar approach to 'f' case */
 				logger_printf("give the path to the image you wanna send : ");
-				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(key_t));
+				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(_key_t));
 				logger_printf("\n");
 
 				/* strip newline */
@@ -458,7 +460,7 @@ static void server_sender_thread_call(void* arg)
 					continue;
 				}
 
-				packet_send_image(socket, user_count_snapshot, 0, file, 1, FILE_STREAMING_BUFFER_SIZE);
+				packet_send_image(sockets, user_count_snapshot, 0, file, 1, FILE_STREAMING_BUFFER_SIZE);
 				/*fseek(file, 0, SEEK_END);
 				size_t file_size = ftell(file);
 				rewind(file);
@@ -534,17 +536,18 @@ int create_server(void)
 	create_chat(&chat);
 	chat_setup_t setup = { 0 };
 	{
-		logger_printf("What is gonna be the maxium users of your room (number) : ");
-		scanf("%d", &setup.max_user);
-		logger_printf("Is your room gonna have a pin (Y/N) : ");
 		char ans[124] = { 0 };
-		scanf("%s", ans);
+		_key_t escape_key[] = { '\r', '\n' };
+		size_t escape_key_len = sizeof(escape_key) / sizeof(_key_t);
+		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "What is gonna be the maxium users of your room (number) : ");
+		sscanf(ans, "%d", &setup.max_user);
+		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "Is your room gonna have a pin (Y/N) : ");
 		if ((*ans = tolower(ans[0])) > EOF)
 		{
 			if (*ans == 'y')
 			{
-				logger_printf("Choose a pin for it (number) : ");
-				scanf("%hd", &setup.room_pass);
+				logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "Choose a pin for it (number) : ");
+				sscanf(ans, "%hd", &setup.room_pass);
 				setup.is_room_locked = 1;
 			}
 			else if (*ans != 'n')
@@ -553,8 +556,7 @@ int create_server(void)
 			}
 		}
 		uint8_t localip = 0;
-		logger_printf("Are you running on local ip (Y/N) : ");
-		scanf("%s", ans);
+		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "Are you running on local ip (Y/N) : ");
 		if ((*ans = tolower(ans[0])) > EOF)
 		{
 			if (*ans == 'y')
@@ -569,10 +571,10 @@ int create_server(void)
 				printf("invalid input.\n");
 			}
 		}
-		logger_printf("What is the ip port number your gonna use for this room : ");
-		scanf("%hd", &setup.port);
+		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "What is the ip port number your gonna use for this room : ");
+		sscanf(ans, "%hd", &setup.port);
 		if(!localip)
-		printf("(make sure that port forwarding is enabled for this port number on your router or check out ./port_forwading_help.txt for more guide)\n\n");
+		logger_printf("(make sure that port forwarding is enabled for this port number on your router or check out ./port_forwading_help.txt for more guide)\n\n");
 	}
 
 	terminal_clear();
@@ -603,8 +605,8 @@ int create_server(void)
 	logger_printf("\nroom is open for the users to connect.\n");
 
 	uint8_t room_alive = 1;
-	uint32_t users_count = 0;
-	user_t* users = 0;
+	uint32_t users_count = 1;
+	user_t* users = malloc(users_count * sizeof(user_t));
 
 	packet_t packet;
 	memset(&packet, 0, sizeof(packet_t));
@@ -614,8 +616,8 @@ int create_server(void)
 	server_wrap.user_count = &users_count;
 	server_wrap.room_alive = &room_alive;
 	thread_t sender_thread, reciver_thread;
-	thread_begin(&sender_thread, server_sender_thread_call, 1, &server_wrap);
-	thread_begin(&reciver_thread, server_reciver_thread_call, 1, &server_wrap);
+	thread_begin(&sender_thread, (THREADCALLBACK)server_sender_thread_call, 1, &server_wrap);
+	thread_begin(&reciver_thread, (THREADCALLBACK)server_reciver_thread_call, 1, &server_wrap);
 	while (1)
 	{
 		mutex_lock(&server_mutex);
@@ -692,7 +694,7 @@ int create_server(void)
 
 				clear_line();
 				print_color(login_msg, CLR_MAGENTA, CLR_BG_BLACK);
-				packet_send_chat(users, users_count, 0, login_msg, (uint32_t)len);
+				packet_send_chat(&sock, 1, 0, login_msg, (uint32_t)len);
 			}
 		}
 		else if (sock < 0)

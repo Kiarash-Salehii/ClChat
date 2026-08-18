@@ -3,7 +3,9 @@
 #ifndef CONSOLE_H
 #define CONSOLE_H
 
-typedef enum Key
+#undef key_t
+
+enum __key
 {
     KEY_NONE = 0,
 
@@ -202,7 +204,9 @@ typedef enum Key
     KEY_MENU,
 
     KEY_MAX
-} key_t;
+};
+
+typedef enum __key _key_t;
 
 /* Returns 0 on success */
 int console_init(void);
@@ -217,7 +221,7 @@ int console_key_available(void);
  *   >= 0 : character read
  *   -1   : no character available
  */
-key_t console_read_key(void);
-key_t console_poll_key(void);
+_key_t console_read_key(void);
+_key_t console_poll_key(void);
 
 #endif

@@ -52,6 +52,7 @@ void terminal_clear(void)
 #else
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <termios.h>
 int get_terminal_size(int* width, int* height)
 {
 	struct winsize ws;
