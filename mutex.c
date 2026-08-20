@@ -1,4 +1,5 @@
 #include "mutex.h"
+#include <stdio.h>
 #include <string.h>
 
 int mutex_init(mutex_t* m)
@@ -8,11 +9,19 @@ int mutex_init(mutex_t* m)
     InitializeCriticalSection(&m->handle);
     return 0;
 #else
-    // pthread_mutexattr_t attr;
-    // pthread_mutexattr_init(&attr);
-    // pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-
-    return pthread_mutex_init(&m->handle, 0);
+    pthread_mutexattr_t attr;
+    int r = pthread_mutexattr_init(&attr);
+    if (r != 0)
+        return r;
+    r = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    if (r != 0)
+    {
+        pthread_mutexattr_destroy(&attr);
+        return r;
+    }
+    r = pthread_mutex_init(&m->handle, &attr);
+    pthread_mutexattr_destroy(&attr);
+    return r;
 #endif
 }
 

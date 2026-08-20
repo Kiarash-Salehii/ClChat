@@ -30,14 +30,15 @@ int get_str(char buffer[], int count, _key_t* escapers, int escapers_count)
 		}
 
 		/* Handle backspace (ASCII BS = 8) gracefully */
-		if (key == 8 || key == KEY_BACKSPACE)
+		if (key == 8 || key == KEY_BACKSPACE || key == 127)
 		{
 			if (index > 0)
 			{
 				--index;
 				buffer[index] = '\0';
 				/* erase on console: backspace, space, backspace */
-				printf("\b \b");
+				logger_printf("\b \b");
+				fflush(stdout);
 			}
 			continue;
 		}
@@ -49,7 +50,8 @@ int get_str(char buffer[], int count, _key_t* escapers, int escapers_count)
 			{
 				buffer[index++] = (char)key;
 				buffer[index] = '\0';
-				printf("%c", (char)key);
+				logger_printf("%c", (char)key);
+				fflush(stdout);
 			}
 			else
 			{
@@ -112,16 +114,13 @@ static void close_socket(int s) { if (s >= 0) close(s); }
 
 void termination_signal(int sig)
 {
+	putc('\n', stdout);
+
 	socket_cleanup();
 	console_shutdown();
 	logger_shutdown();
 
 	exit(sig);
-}
-
-void segment_signal(int sig)
-{
-	
 }
 
 int main(int argc, char **args)
@@ -131,13 +130,11 @@ int main(int argc, char **args)
 	{
 		fprintf(stderr, "Failed to initialize logger\n");
 	}
-	/* initialize sockets for the whole process early (Windows WSA) */
 	if (socket_init() != 0)
 	{
 		fprintf(stderr, "Failed to initialize sockets\n");
 		return 1;
 	}
-
 	if (console_init() != 0)
 	{
 		fprintf(stderr, "Failed to initialize console input\n");
@@ -145,11 +142,6 @@ int main(int argc, char **args)
 	}
 
 	signal(SIGINT, termination_signal);
-	signal(SIGSEGV, segment_signal);
-
-#ifndef _WIN32
-
-#endif
 
 	_key_t escape_key[] = { '\r', '\n' };
 	uint8_t exit = 0;

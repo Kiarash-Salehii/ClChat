@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include "console.h"
 
@@ -32,7 +33,7 @@ static int get_str(char buffer[], int count, _key_t* escapers, int escapers_coun
         if (!console_key_available())
             continue;
 
-        key_t key = console_read_key();
+        _key_t key = console_read_key();
         if (key == -1)
             continue; /* no key actually read */
 
@@ -42,13 +43,13 @@ static int get_str(char buffer[], int count, _key_t* escapers, int escapers_coun
             if (escapers[i] == key)
             {
                 buffer[index] = '\0';
-                logger_printf("\n");
+                printf("\n");
+                fflush(stdout);
                 return index;
             }
         }
-
         /* Handle backspace (ASCII BS = 8) gracefully */
-        if (key == 8 || key == KEY_BACKSPACE)
+        if (key == 8 || key == KEY_BACKSPACE || key == 127)
         {
             if (index > 0)
             {
@@ -56,6 +57,7 @@ static int get_str(char buffer[], int count, _key_t* escapers, int escapers_coun
                 buffer[index] = '\0';
                 /* erase on console: backspace, space, backspace */
                 printf("\b \b");
+                fflush(stdout);
             }
             continue;
         }
@@ -67,7 +69,8 @@ static int get_str(char buffer[], int count, _key_t* escapers, int escapers_coun
             {
                 buffer[index++] = (char)key;
                 buffer[index] = '\0';
-                logger_printf("%c", (char)key);
+                printf("%c", (char)key);
+                fflush(stdout);
             }
             else
             {
@@ -380,4 +383,60 @@ void logger_unlock(void)
 {
     ensure_init();
     mutex_unlock(&console_mutex);
+}
+
+
+static uint8_t error_logger_initiled;
+static FILE* error_file;
+static struct
+{
+    int err_id;
+    const char* name;
+    const char* discription;
+} *err_ids;
+static size_t err_ids_count;
+
+static void init_error_logger()
+{
+    if(!error_logger_initiled)
+    {
+        error_file = fopen("error_log.txt", "+a");
+        if(!error_file)
+        {
+            logger_printf("failed to initialize error logger file.");
+        }
+
+        log_time_2file(error_file, "[%YYYY/%MM/%DD %hh:%mm:%ss]", " logger initialized.\n");
+    }
+}
+
+void log_error(int err, const char* message)
+{
+    init_error_logger();
+
+    for(size_t i = 0;i < err_ids_count; i++)
+    {
+        if(err_ids[i].err_id == err)
+        {
+            size_t name_len;
+            if(err_ids[i].name)
+                name_len = strlen(err_ids[i].name);
+            else
+                {
+                    err_ids[i].name = "(unknown)";
+                    name_len = 9;
+                }
+            size_t discription_len = strlen(err_ids[i].discription);
+
+            char fmt[] =
+            " %s:%s\n"
+            "\t\t\tMessage :%s";
+            
+            size_t log_size = name_len + discription_len + strlen(message) + 15;
+            char* log = malloc(log_size + 1);
+            sprintf(log, fmt, err_ids[i].name, err_ids[i].discription, message);
+            log_time_2file(error_file, "[%YYYY/%MM/%DD %hh:%mm:%ss]", log);
+            free(log);
+        }
+    }
 }

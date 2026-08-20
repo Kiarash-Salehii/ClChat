@@ -27,7 +27,7 @@ void create_chat(chat_t* chat)
 	{
 		return;
 	}
-	memcpy(chat, _chat, sizeof(void*));
+	memcpy(chat, &_chat, sizeof(void*));
 #ifdef _CHAT_WINDOWS_
 	int wsas = WSAStartup(MAKEWORD(2, 2), &wsa_data);
 #endif

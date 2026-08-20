@@ -9,6 +9,11 @@ enum __key
 {
     KEY_NONE = 0,
 
+    KEY_ESCAPE    = 27,
+    KEY_ENTER     = 10,
+    KEY_TAB       = 9,
+    KEY_BACKSPACE = 127,
+
     /* Printable ASCII (32-126) */
 
     KEY_SPACE          = 32,
@@ -115,16 +120,10 @@ enum __key
 
     /* Non-ASCII */
 
-    KEY_ESCAPE = 256,
-
-    KEY_ENTER,
-    KEY_TAB,
-    KEY_BACKSPACE,
-
     KEY_INSERT,
     KEY_DELETE,
 
-    KEY_RIGHT,
+    KEY_RIGHT = 262,
     KEY_LEFT,
     KEY_DOWN,
     KEY_UP,

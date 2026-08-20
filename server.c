@@ -72,16 +72,6 @@ static uint64_t hash(uint8_t* str, uint32_t str_len)
 	return hash;
 }
 
-static void send_msg(int sock, const char* msg, uint32_t msg_len, uint64_t user_id)
-{
-	packet_t packet;
-	packet_begin(&packet, PKT_CHAT, get_new_packet_id(PKT_CHAT));
-	packet_write_u64(&packet, user_id);
-	packet_write_u32(&packet, msg_len);
-	packet_append(&packet, msg, msg_len);
-	packet_send(&packet, sock);
-}
-
 typedef struct
 {
 	uint64_t id;
@@ -101,13 +91,13 @@ static mutex_t server_mutex;
 
 static void server_reciver_thread_call(void* arg)
 {
-	server_thread_wraper_t* wrap = (server_thread_wraper_t*)arg;
+	server_thread_wraper_t* wrap = ((void**)arg)[0];
 	packet_t packet;
 	while (1)
 	{
 		/* Take a short snapshot under the mutex, then release it before doing any blocking I/O */
 		mutex_lock(&server_mutex);
-		if (!*wrap->room_alive)
+		if (!*(wrap->room_alive))
 		{
 			mutex_unlock(&server_mutex);
 			break;
@@ -287,7 +277,7 @@ static void server_reciver_thread_call(void* arg)
 						break;
 					if (tolower(*buffer) == 'n') continue;
 					char file_name[124];
-					sprintf(file_name, "%u.%s", time(0) / UINT32_MAX, (const char*)packet.payload.chunks[1].ptr);
+					sprintf(file_name, "%u.%s", time(0) % UINT32_MAX, (const char*)packet.payload.chunks[1].ptr);
 					FILE* file = fopen(file_name, "wb");
 					if (file == 0)
 					{
@@ -318,30 +308,27 @@ static void server_reciver_thread_call(void* arg)
 
 static void server_sender_thread_call(void* arg)
 {
-	server_thread_wraper_t* wrap = (server_thread_wraper_t*)arg;
+	server_thread_wraper_t* wrap = ((void**)arg)[0];
 
 	print_color("1- [c]hat.\n2- send [f]ile.\n3- send [i]mage.\n4- [q]uit.\n", CLR_BLUE, CLR_BG_BLACK);
-
 	char buffer[2048];
 	_key_t escaper_key[] = { '\n', KEY_ESCAPE, '\r' };
 	while (1)
 	{
 		mutex_lock(&server_mutex);
-		if (!*wrap->room_alive)
+		if (!*(wrap->room_alive))
 		{
 			mutex_unlock(&server_mutex);
 			break;
 		}
 		mutex_unlock(&server_mutex);
 
-		logger_printf("sender thread running.\n")
 		print_color("choose an option : \r", CLR_BLUE, CLR_BG_BLACK);
 		fflush(stdout);
 		_key_t key;
 
 		if (key = console_poll_key())
 		{
-			logger_printf("Key pressed.\n");
 			mutex_lock(&server_mutex);
 				uint32_t user_count_snapshot = *wrap->user_count;
 				user_t* users_snapshot = *wrap->users;
@@ -530,8 +517,6 @@ static void server_sender_thread_call(void* arg)
 
 int create_server(void)
 {
-	mutex_init(&server_mutex);
-
 	chat_t chat;
 	create_chat(&chat);
 	chat_setup_t setup = { 0 };
@@ -611,6 +596,14 @@ int create_server(void)
 	packet_t packet;
 	memset(&packet, 0, sizeof(packet_t));
 
+	int mutex_r = mutex_init(&server_mutex);
+	logger_printf("mutex_init() returned %d.\n", mutex_r);
+	if(mutex_r != 0)
+	{
+		
+		return mutex_r;
+	}
+
 	server_thread_wraper_t server_wrap = { 0 };
 	server_wrap.users = &users;
 	server_wrap.user_count = &users_count;
@@ -636,7 +629,7 @@ int create_server(void)
 			{
 				if (setup.is_room_locked && packet.payload.buffer->login.room_pin != setup.room_pass)
 				{
-					send_msg(sock, "wrong password.", 16, 0);
+					packet_send_chat(&sock, 1, 0, "wrong password.", 16);
 					chat_kick_by_sock(sock);
 					continue;
 				}
@@ -648,7 +641,7 @@ int create_server(void)
 					// allocation failed: report and close socket, keep users_count unchanged
 					print_color("Memory allocation failed for new user.\n", CLR_RED, CLR_BG_BLACK);
 					mutex_unlock(&server_mutex);
-					send_msg(sock, "server error: cannot accept new user.", 38, 0);
+					packet_send_chat(&sock, 1, 0, "server error: cannot accept new user.", 38);
 					closesocket(sock);
 					continue;
 					// handle failure: send error to client / close socket etc.

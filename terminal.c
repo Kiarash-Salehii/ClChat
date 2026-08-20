@@ -57,13 +57,19 @@ int get_terminal_size(int* width, int* height)
 {
 	struct winsize ws;
 
-	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1)
+	if (ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) != 0 &&
+		ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != 0 &&
+		ioctl(STDERR_FILENO, TIOCGWINSZ, &ws) != 0)
 		return 0;
 
 	if (width != 0)
-		*width = ws.ws_col;
+		{
+			*width = (int)ws.ws_col;
+		}
 	if (height != 0)
-		*height = ws.ws_row;
+		{
+			*height = (int)ws.ws_row;
+		}
 
 	return 1;
 }
