@@ -121,7 +121,7 @@ void print_highlighted(const char* text, text_color color)
         logger_printf("\033[%dm%s\033[0m", ansi_colors[bg], text);
         return;
     }
-
+    logger_lock();
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     WORD originalAttrs = 0;
     if (GetConsoleScreenBufferInfo(h, &csbi))
@@ -141,20 +141,21 @@ void print_highlighted(const char* text, text_color color)
         }
         else
         {
-            logger_printf("Failed to set console attributes: %lu\n", GetLastError());
+            printf("Failed to set console attributes: %lu\n", GetLastError());
         }
 
         /* Do the write even if SetConsoleTextAttribute failed */
-        logger_printf("%s", text);
+        printf("%s", text);
 
         /* Always attempt to restore original attributes and log if it fails */
         if (setOk)
         {
             if (!SetConsoleTextAttribute(h, originalAttrs))
             {
-                logger_printf("Failed to restore console attributes: %lu\n", GetLastError());
+                printf("Failed to restore console attributes: %lu\n", GetLastError());
             }
         }
+        logger_unlock();
     }
     else
     {
@@ -167,25 +168,6 @@ void print_highlighted(const char* text, text_color color)
     if (bg >= colors) bg = 0;
     logger_printf("\033[%dm%s\033[0m", ansi_colors[bg], text);
 #endif
-}
-
-static int count_vars(const char* text)
-{
-    if (text == NULL) return 0;
-    int count = 0;
-    for (const char* c = text; *c; ++c)
-    {
-        if (*c == '%')
-        {
-            if (c[1] == '%')
-            {
-                ++c; /* skip escaped percent */
-                continue;
-            }
-            ++count;
-        }
-    }
-    return count;
 }
 
 void printf_highlighted(const char* text, text_color color, ...)
@@ -211,7 +193,7 @@ void printf_highlighted(const char* text, text_color color, ...)
         va_end(vl);
         return;
     }
-
+    logger_lock();
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     WORD originalAttrs = 0;
     if (GetConsoleScreenBufferInfo(h, &csbi))
@@ -232,20 +214,21 @@ void printf_highlighted(const char* text, text_color color, ...)
         }
         else
         {
-            logger_printf("Failed to set console attributes: %lu\n", GetLastError());
+            printf("Failed to set console attributes: %lu\n", GetLastError());
         }
 
         /* Do the write even if SetConsoleTextAttribute failed */
-        logger_vprintf(text, vl);
+        vprintf(text, vl);
 
         /* Always attempt to restore original attributes and log if it fails */
         if (setOk)
         {
             if (!SetConsoleTextAttribute(h, originalAttrs))
             {
-                logger_printf("Failed to restore console attributes: %lu\n", GetLastError());
+                printf("Failed to restore console attributes: %lu\n", GetLastError());
             }
         }
+        logger_unlock();
     }
     else
     {
@@ -284,6 +267,7 @@ void print_color(const char* text, text_color fg_color, text_color bg_color)
         return;
     }
 
+    logger_lock();
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     WORD originalAttrs = 0;
     if (GetConsoleScreenBufferInfo(h, &csbi))
@@ -301,20 +285,21 @@ void print_color(const char* text, text_color fg_color, text_color bg_color)
         }
         else
         {
-            logger_printf("Failed to set console attributes: %lu\n", GetLastError());
+           printf("Failed to set console attributes: %lu\n", GetLastError());
         }
 
         /* Do the write even if SetConsoleTextAttribute failed */
-        logger_printf("%s", text);
+        printf("%s", text);
 
         /* Always attempt to restore original attributes and log if it fails */
         if (setOk)
         {
             if (!SetConsoleTextAttribute(h, originalAttrs))
             {
-                logger_printf("Failed to restore console attributes: %lu\n", GetLastError());
+                printf("Failed to restore console attributes: %lu\n", GetLastError());
             }
         }
+        logger_unlock();
     }
     else
     {
@@ -349,6 +334,7 @@ void printf_color(const char* fmt, text_color fg_color, text_color bg_color, ...
         return;
     }
 
+    logger_lock();
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     WORD originalAttrs = 0;
     if (GetConsoleScreenBufferInfo(h, &csbi))
@@ -367,20 +353,21 @@ void printf_color(const char* fmt, text_color fg_color, text_color bg_color, ...
         }
         else
         {
-            logger_printf("Failed to set console attributes: %lu\n", GetLastError());
+            printf("Failed to set console attributes: %lu\n", GetLastError());
         }
 
         /* Do the write even if SetConsoleTextAttribute failed */
-        logger_vprintf(fmt, vl);
+        vprintf(fmt, vl);
 
         /* Always attempt to restore original attributes and log if it fails */
         if (setOk)
         {
             if (!SetConsoleTextAttribute(h, originalAttrs))
             {
-                logger_printf("Failed to restore console attributes: %lu\n", GetLastError());
+                printf("Failed to restore console attributes: %lu\n", GetLastError());
             }
         }
+        logger_unlock();
     }
     else
     {

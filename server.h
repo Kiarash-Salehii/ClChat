@@ -18,7 +18,7 @@
 #include "console.h"
 #include "terminal.h"
 #include "logger.h"
-#include "console.h"
+#include "net_interface.h"
 
 #ifdef __cplusplus
 extern "C" {

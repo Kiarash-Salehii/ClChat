@@ -15,7 +15,7 @@ int get_str(char buffer[], int count, _key_t* escapers, int escapers_count)
 		if (!console_key_available())
 			continue;
 
-		key_t key = console_read_key();
+		_key_t key = console_read_key();
 		if (key == -1)
 			continue; /* no key actually read */
 
@@ -140,7 +140,6 @@ int main(int argc, char **args)
 		fprintf(stderr, "Failed to initialize console input\n");
 		return 1;
 	}
-
 	signal(SIGINT, termination_signal);
 
 	_key_t escape_key[] = { '\r', '\n' };

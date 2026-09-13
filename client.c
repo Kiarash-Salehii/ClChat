@@ -46,7 +46,7 @@ mutex_t client_mutex;
 
 void client_sender_thread_call(void* arg)
 {
-	client_thread_wraper_t* wrap = (client_thread_wraper_t*)arg;
+	client_thread_wraper_t* wrap = (client_thread_wraper_t*)((void**)arg)[0];
 
 	print_color("1- [c]hat.\n2- send [f]ile.\n3- send [i]mage.\n4- [q]uit.\n", CLR_BLUE, CLR_BG_BLACK);
 
@@ -64,7 +64,8 @@ void client_sender_thread_call(void* arg)
 
 		print_color("choose an option : \r", CLR_BLUE, CLR_BG_BLACK);
 		fflush(stdout);
-		key_t key;
+		_key_t key;
+		_key_t termins[] = { '\n', '\r' };
 		if (key = console_poll_key())
 		{
 			clear_line();
@@ -72,43 +73,28 @@ void client_sender_thread_call(void* arg)
 			{
 			case 'c':
 			{
-				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(key_t));
+				logger_printf("> ");
+				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(_key_t));
 				logger_printf("\n");
 
 				/* strip newline */
 				size_t len = strlen(buffer);
-				if (len > 0 && buffer[len - 1] == '\n') buffer[--len] = '\0';
-				if (len == 0) continue;
 
-				packet_t packet;
-				packet_begin(&packet, PKT_CHAT, get_new_packet_id(PKT_CHAT));
-				packet_write_u64(&packet, wrap->user_id);
-				packet_write_u32(&packet, (uint32_t)len);
-				packet_append(&packet, buffer, (uint32_t)len);
-
-				packet_send(&packet, wrap->sock);
-
-				packet_destroy(&packet);
+				packet_send_chat(&wrap->sock, 1, wrap->user_id, buffer, len);
 				break;
 			}
 			case 'f':
 			{
 				/* unchanged file-read logic up to packet construction (kept original behavior) */
-				logger_printf("give the path to the file you wanna send : ");
-				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(key_t));
+				logger_prompt_gets(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(_key_t), "give the path to the file you wanna send : ");
 
 				char file_name[2048];
-				logger_printf("give it a name : ");
-				get_str(file_name, sizeof(file_name), escaper_key, sizeof(escaper_key) / sizeof(key_t));
+				logger_prompt_gets(file_name, sizeof(file_name), escaper_key, sizeof(escaper_key) / sizeof(_key_t), "give it a name : ");
 
 				/* strip newline */
 				size_t path_len = strlen(buffer);
-				if (path_len > 0 && buffer[path_len - 1] == '\n') buffer[--path_len] = '\0';
-				if (path_len == 0) continue;
-
 				size_t filename_len = strlen(file_name);
-				if (filename_len > 0 && file_name[filename_len - 1] == '\n') file_name[--filename_len] = '\0';
-				if (filename_len == 0) continue;
+				
 
 				FILE* file = fopen(buffer, "rb");
 				if (file == 0)
@@ -127,37 +113,16 @@ void client_sender_thread_call(void* arg)
 					continue;
 				}
 
-				void* file_data = malloc(file_size);
-				size_t read_size = fread(file_data, 1, file_size, file);
-				fclose(file);
-				if (read_size != file_size)
-				{
-					printf_color("read data size doesn't match the file size. file size : %ld -- read size : %ld\n", CLR_RED, CLR_BG_BLACK, file_size, read_size);
-					free(file_data);
-					continue;
-				}
-
-				packet_t packet;
-				packet_begin(&packet, PKT_FILE, get_new_packet_id(PKT_FILE));
-				packet_write_u64(&packet, wrap->user_id);
-				packet_write_u32(&packet, (uint32_t)filename_len);
-				packet_write_u32(&packet, (uint32_t)file_size);
-				packet_append(&packet, file_name, (uint32_t)filename_len);
-				packet_append(&packet, file_data, (uint32_t)file_size);
-				packet_send(&packet, wrap->sock);
-				packet_destroy(&packet);
+				packet_send_file(&wrap->sock, 1, wrap->user_id, file, file_name, filename_len, 1, FILE_STREAMING_BUFFER_SIZE);
 				break;
 			}
 			case 'i':
 			{
 				/* similar approach to 'f' case */
-				logger_printf("give the path to the image you wanna send : ");
-				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(key_t));
+				logger_prompt_gets(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(_key_t), "give the path to the image you wanna send : ");
 
 				/* strip newline */
 				size_t path_len = strlen(buffer);
-				if (path_len > 0 && buffer[path_len - 1] == '\n') buffer[--path_len] = '\0';
-				if (path_len == 0) continue;
 
 				FILE* file = fopen(buffer, "rb");
 				if (file == 0)
@@ -176,56 +141,16 @@ void client_sender_thread_call(void* arg)
 					continue;
 				}
 
-				void* file_data = malloc(file_size);
-				size_t read_size = fread(file_data, 1, file_size, file);
-				fclose(file);
-				if (read_size != file_size)
-				{
-					printf_color("read data size doesn't match the file size. file size : %ld -- read size : %ld\n", CLR_RED, CLR_BG_BLACK, file_size, read_size);
-					free(file_data);
-					continue;
-				}
-
-				uint32_t extension_length = 0;
-				char* extension = 0;
-
-				for (int i = path_len - 1; i > 0; i--)
-				{
-					if (buffer[i] != 0 || buffer[i] != ' ')
-						++extension_length;
-					if (buffer[i] == '.')
-					{
-						extension = &buffer[i + 1];
-						break;
-					}
-				}
-
-				packet_t packet;
-				packet_begin(&packet, PKT_IMAGE, get_new_packet_id(PKT_IMAGE));
-				packet_write_u64(&packet, wrap->user_id);
-				packet_write_u32(&packet, (uint32_t)file_size);
-				packet_write_u32(&packet, extension_length);
-				packet_append(&packet, file_data, (uint32_t)file_size);
-				packet_append(&packet, extension, extension_length);
-				packet_send(&packet, wrap->sock);
-				packet_destroy(&packet);
+				packet_send_image(&wrap->sock, 1, wrap->user_id, file, 1, FILE_STREAMING_BUFFER_SIZE);
 				break;
 			}
 			case 'q':
 			{
-				_key_t termins[] = { '\n', '\r' };
-				char stack_buf[3];
-				logger_prompt_gets(stack_buf, sizeof(stack_buf), termins, 2, "Are you sure to quit chat? (Y/N) ");
-				if (tolower(*stack_buf) == 'n') break;
+				logger_prompt_gets(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(_key_t), "Are you sure to quit chat? (Y/N) ");
+				if (tolower(*buffer) == 'n') break;
 				if (!wrap->username) break;
 				size_t len = strlen(wrap->username);
-				packet_t packet;
-				packet_begin(&packet, PKT_QUIT, get_new_packet_id(PKT_QUIT));
-				packet_write_u64(&packet, wrap->user_id);
-				packet_write_u32(&packet, (uint32_t)strlen(wrap->username));
-				packet_append(&packet, wrap->username, (uint32_t)len);
-				packet_send(&packet, wrap->sock);
-				packet_destroy(&packet);
+				packet_send_quit(&wrap->sock, 1, wrap->user_id, wrap->username, len);
 
 				mutex_lock(&client_mutex);
 				*wrap->connection_alive = 0;
@@ -255,27 +180,28 @@ int client_connect(void)
 	uint8_t room_has_pin = 0;
 	char username[256] = { 0 };
 	{
+		char ans[512] = { 0 };
+		_key_t escape_key[] = { '\r', '\n' };
+		size_t escape_key_len = sizeof(escape_key) / sizeof(_key_t);
 		char room_code[11];
-		logger_printf("What is code of your room (number) : ");
-		scanf("%s", room_code);
-		logger_printf("Is your room have a pin (Y/N) : ");
-		char ans[124] = { 0 };
-		scanf("%s", ans);
+		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "What is code of your room (number) : ");
+		sscanf(ans, "%s", room_code);
+		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "Is your room have a pin (Y/N) : ");
 		if ((*ans = tolower(ans[0])) > EOF)
 		{
 			if (*ans == 'y')
 			{
-				logger_printf("enter pin (number) : ");
-				scanf("%hd", &room_pin);
+				logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "enter pin (number) : ");
+				sscanf(ans, "%hd", &room_pin);
 				room_has_pin = 1;
 			}
 			else if (*ans != 'n')
 			{
-				printf("invalid input.\n");
+				logger_printf("invalid input.\n");
 			}
 		}
-		logger_printf("choose an username for yourself : ");
-		scanf("%s", username);
+		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "choose an username for yourself : ");
+		sscanf(ans, "%s", username);
 		username_len = strlen(username);
 		uint8_t ip_port[6] = { 0 };
 		base32_decode6(room_code, ip_port);
@@ -363,8 +289,6 @@ int client_connect(void)
 	thread_begin(&sender_thread, (THREADCALLBACK)client_sender_thread_call, 1, &thread_wrap_data);
 	packet_t packet;
 	memset(&packet, 0, sizeof(packet));
-	rewind(stdin);
-	rewind(stdout);
 	while (1)
 	{
 		mutex_lock(&client_mutex);
@@ -375,7 +299,6 @@ int client_connect(void)
 		}
 		mutex_unlock(&client_mutex);
 
-		fflush(stdout);
 		packet_recv(sock, &packet);
 		clear_line();
 		if (packet.header.type == PKT_CHAT)
@@ -386,7 +309,7 @@ int client_connect(void)
 			{
 				print_color("ADMIN --- ", CLR_RED, CLR_BG_BLACK);
 			}
-			logger_printf("%s\n", (const char*)packet.payload.chunks[0].ptr);
+			printf("%s\n", (const char*)packet.payload.chunks[0].ptr);
 			logger_unlock();
 		}
 		else if (packet.header.type == PKT_FILE)
@@ -394,8 +317,10 @@ int client_connect(void)
 			clear_line();
 			print_color("You have recived a file. Do you wanna keep it? (Y/N) ", CLR_GREEN, CLR_BG_BLACK);
 			char buffer[20];
-			if (!fgets(buffer, sizeof(buffer), stdin))
-				break;
+			logger_lock();
+			_key_t escaper[] = {'\r', '\n'};
+			get_str(buffer, sizeof(buffer), escaper, 2);
+			logger_unlock();
 			if (tolower(*buffer) == 'n') continue;
 			if (packet.payload.buffer->file.user_id == 0)
 			{
@@ -415,8 +340,10 @@ int client_connect(void)
 			clear_line();
 			print_color("You have recived an image. Do you wanna keep it? (Y/N) ", CLR_GREEN, CLR_BG_BLACK);
 			char buffer[20];
-			if (!fgets(buffer, sizeof(buffer), stdin))
-				break;
+			logger_lock();
+			_key_t escaper[] = { '\r', '\n' };
+			get_str(buffer, sizeof(buffer), escaper, 2);
+			logger_unlock();
 			if (tolower(*buffer) == 'n') continue;
 			char file_name[124];
 			sprintf(file_name, "%u.%s", time(0) / UINT32_MAX, (const char*)packet.payload.chunks[1].ptr);

@@ -24,6 +24,8 @@
 extern "C" {
 #endif
 
+#define FILE_STREAMING_BUFFER_SIZE 65536u
+
 int get_str(char buffer[], int count, _key_t* escapers, int escapers_count);
 void clear_line();
 int client_connect(void);

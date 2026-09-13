@@ -17,7 +17,7 @@ int console_key_available(void)
     return _kbhit();
 }
 
-int console_read_key(void)
+_key_t console_read_key(void)
 {
     if (!_kbhit())
         return -1;
@@ -25,7 +25,7 @@ int console_read_key(void)
     return _getch();
 }
 
-key_t console_poll_key(void)
+_key_t console_poll_key(void)
 {
     if(console_key_available())
     {

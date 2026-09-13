@@ -58,6 +58,8 @@ static uint32_t get_address()
 	return address;
 }
 
+int net_get_local_address(char**);
+
 static uint64_t hash(uint8_t* str, uint32_t str_len)
 {
 	unsigned long hash = 5381;
@@ -93,6 +95,7 @@ static void server_reciver_thread_call(void* arg)
 {
 	server_thread_wraper_t* wrap = ((void**)arg)[0];
 	packet_t packet;
+	_key_t escaper[] = { '\r', '\n', KEY_ESCAPE };
 	while (1)
 	{
 		/* Take a short snapshot under the mutex, then release it before doing any blocking I/O */
@@ -150,15 +153,15 @@ static void server_reciver_thread_call(void* arg)
 					}
 
 					char stack_buffer[4092];
-					char msg_fmt[] = "u%ld->%s --- %s";
+					char msg_fmt[] = "%s : \"%s\"";
 					char* msg = stack_buffer;
-					int size_needed = sprintf(stack_buffer, msg_fmt, packet.payload.buffer->chat.user_id, username, (const char*)packet.payload.chunks[0].ptr);
+					int size_needed = sprintf(stack_buffer, msg_fmt, username, (const char*)packet.payload.chunks[0].ptr);
 					if (size_needed > sizeof(stack_buffer))
 					{
 						msg = malloc(size_needed + 1);
 						if (msg == 0)
 							continue;
-						sprintf(msg, msg_fmt, packet.payload.buffer->chat.user_id, username, (const char*)packet.payload.chunks[0].ptr);
+						sprintf(msg, msg_fmt, username, (const char*)packet.payload.chunks[0].ptr);
 					}
 
 					clear_line();
@@ -216,10 +219,8 @@ static void server_reciver_thread_call(void* arg)
 					}
 
 					clear_line();
-					print_color("You have recived a file. Do you wanna keep it? (Y/N) ", CLR_GREEN, CLR_BG_BLACK);
 					char buffer[20];
-					if (!fgets(buffer, sizeof(buffer), stdin))
-						break;
+					logger_prompt_gets(buffer, sizeof(buffer), escaper, sizeof(escaper) / sizeof(_key_t), "You have recived a file. Do you wanna keep it? (Y/N) ", CLR_GREEN, CLR_BG_BLACK);
 					if (tolower(*buffer) == 'n') continue;
 					if (packet.payload.buffer->file.user_id == 0)
 					{
@@ -271,13 +272,56 @@ static void server_reciver_thread_call(void* arg)
 					}
 
 					clear_line();
-					print_color("You have recived an image. Do you wanna keep it? (Y/N) ", CLR_GREEN, CLR_BG_BLACK);
 					char buffer[20];
-					if (!fgets(buffer, sizeof(buffer), stdin))
-						break;
+					logger_prompt_gets(buffer, sizeof(buffer), escaper, sizeof(escaper) / sizeof(_key_t), "You have recived an image. Do you wanna keep it? (Y/N) ", CLR_GREEN, CLR_BG_BLACK);
 					if (tolower(*buffer) == 'n') continue;
+
+					const char* extention = 0;
+					switch (packet.payload.buffer->image.image_type)
+					{
+						case IMAGE_JPEG:
+						{
+							extention = "jpeg";
+							break;
+						}
+						case IMAGE_PNG:
+						{
+							extention = "png";
+							break;
+						}
+						case IMAGE_GIF:
+						{
+							extention = "gif";
+							break;
+						}
+						case IMAGE_BMP:
+						{
+							extention = "bmp";
+							break;
+						}
+						case IMAGE_WEBP:
+						{
+							extention = "webp";
+							break;
+						}
+						case IMAGE_TIFF:
+						{
+							extention = "tiff";
+							break;
+						}
+						case IMAGE_ICO:
+						{
+							extention = "ico";
+							break;
+						}
+						case IMAGE_UNKNOWN:
+						{
+							extention = "(unknown)";
+							break;
+						}
+					}
 					char file_name[124];
-					sprintf(file_name, "%u.%s", time(0) % UINT32_MAX, (const char*)packet.payload.chunks[1].ptr);
+					sprintf(file_name, "%u.%s", time(0) % UINT32_MAX, extention);
 					FILE* file = fopen(file_name, "wb");
 					if (file == 0)
 					{
@@ -345,12 +389,13 @@ static void server_sender_thread_call(void* arg)
 				}
 				for (uint32_t i = 0; i < user_count_snapshot; ++i)
 					sockets[i] = users_snapshot[i].sock;
-				mutex_unlock(&server_mutex);
+			mutex_unlock(&server_mutex);
 			clear_line();
 			switch (tolower(key))
 			{
 			case 'c':
 			{
+				logger_printf("> ");
 				get_str(buffer, sizeof(buffer), escaper_key, sizeof(escaper_key) / sizeof(_key_t));
 				logger_printf("\n");
 
@@ -372,7 +417,7 @@ static void server_sender_thread_call(void* arg)
 
 				char file_name[2048];
 				logger_printf("give it a name : ");
-				get_str(file_name, sizeof(file_name), escaper_key, sizeof(escaper_key) / sizeof(key_t));
+				get_str(file_name, sizeof(file_name), escaper_key, sizeof(escaper_key) / sizeof(_key_t));
 				logger_printf("\n");
 
 				/* strip newline */
@@ -541,14 +586,15 @@ int create_server(void)
 			}
 		}
 		uint8_t localip = 0;
-		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "Are you running on local ip (Y/N) : ");
+		logger_prompt_gets(ans, sizeof(ans), escape_key, escape_key_len, "Are you running on local lan ip (Y/N) : ");
 		if ((*ans = tolower(ans[0])) > EOF)
 		{
 			if (*ans == 'y')
 			{
 				setup.is_private_ip = 1;
-				setup.ip.ip_8[0] = 127;
-				setup.ip.ip_8[3] = 1;
+				uint32_t index;
+				uint8_t prefix_len;
+				net_get_lan_ipv4(&setup.ip.ip_32, &index, &prefix_len);
 				localip = 1;
 			}
 			else if (*ans != 'n')
@@ -597,10 +643,8 @@ int create_server(void)
 	memset(&packet, 0, sizeof(packet_t));
 
 	int mutex_r = mutex_init(&server_mutex);
-	logger_printf("mutex_init() returned %d.\n", mutex_r);
 	if(mutex_r != 0)
 	{
-		
 		return mutex_r;
 	}
 
