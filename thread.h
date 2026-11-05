@@ -48,7 +48,7 @@ typedef enum {
 	THREAD_SUCCESS
 } thread_result_t;
 
-thread_result_t thread_begin(thread_t*, THREADCALLBACK, size_t numArgs, ...);
+thread_result_t thread_begin(thread_t*, THREADCALLBACK, void* user_data);
 thread_result_t thread_suspend(thread_t*);
 thread_result_t thread_resume(thread_t*);
 thread_result_t thread_destroy(thread_t*);

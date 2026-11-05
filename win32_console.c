@@ -22,7 +22,25 @@ _key_t console_read_key(void)
     if (!_kbhit())
         return -1;
 
-    return _getch();
+    int key = _getch();
+    if (key == 0 || key == 0xE0)
+    {
+        switch (_getch())
+        {
+        case 0x48: return KEY_UP;
+        case 0x50: return KEY_DOWN;
+        case 0x4B: return KEY_LEFT;
+        case 0x4D: return KEY_RIGHT;
+        default:   return KEY_NONE;
+        }
+    }
+
+    switch (key)
+    {
+    case '\r': return KEY_ENTER;
+    }
+
+    return key;
 }
 
 _key_t console_poll_key(void)

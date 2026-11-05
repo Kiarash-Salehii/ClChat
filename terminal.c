@@ -17,6 +17,7 @@ int get_terminal_size(int* width, int* height)
 
 	return 1;
 }
+
 int get_terminal_cursor_position(int* x, int* y)
 {
 	CONSOLE_SCREEN_BUFFER_INFO info;
@@ -30,6 +31,38 @@ int get_terminal_cursor_position(int* x, int* y)
 
 	return 1;
 }
+
+int set_terminal_cursor_position(int x, int y)
+{
+	COORD cursor_position = { 0 };
+	cursor_position.Y = y;
+	cursor_position.X = x;
+
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), cursor_position);
+
+	return 1;
+}
+
+void terminal_clear_line(void)
+{
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	DWORD cells, written;
+
+	if (!GetConsoleScreenBufferInfo(hConsole, &csbi))
+		return;
+
+	cells = csbi.dwSize.X;
+	csbi.dwCursorPosition.X = 0;
+
+	FillConsoleOutputCharacterA(hConsole, ' ', cells, csbi.dwCursorPosition, &written);
+
+	FillConsoleOutputAttribute(hConsole, csbi.wAttributes, cells, csbi.dwCursorPosition, &written);
+
+	SetConsoleCursorPosition(hConsole, csbi.dwCursorPosition);
+}
+
 void terminal_clear(void)
 {
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -121,6 +154,17 @@ int get_terminal_cursor_position(int* x, int* y)
 fail:
 	tcsetattr(STDIN_FILENO, TCSANOW, &old);
 	return 0;
+}
+
+int set_terminal_cursor_position(int x, int y)
+{
+	logger_printf("\033[%d;%dH", y + 1, x + 1);
+	return 1;
+}
+
+void terminal_clear_line(void)
+{
+	logger_printf("\033[2K");
 }
 
 void terminal_clear(void)

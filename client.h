@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <time.h>
 
+#include "socket.h"
 #include "chat_core.h"
 #include "chat_packet.h"
 #include "base32_6.h"
@@ -18,7 +19,8 @@
 #include "console.h"
 #include "terminal.h"
 #include "logger.h"
-#include "console.h"
+#include "atomic.h"
+#include "vector.h"
 
 #ifdef __cplusplus
 extern "C" {

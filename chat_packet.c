@@ -1,6 +1,12 @@
 #include "chat_packet.h"
+
+#include "mutex.h"
+#include "atomic.h"
+#include "vector.h"
+
 #include <string.h>
 #include <limits.h>
+#include <assert.h>
 
 static const size_t packet_sizes[] =
 {
@@ -9,8 +15,12 @@ static const size_t packet_sizes[] =
 	sizeof(chat_packet_t),
 	sizeof(file_packet_t),
 	sizeof(image_packet_t),
-	sizeof(quit_packet_t)
+	sizeof(quit_packet_t),
+	sizeof(listen_packet_t),
+	sizeof(empty_packet_t)
 };
+
+static const size_t packet_types_count = sizeof(packet_sizes) / sizeof(*packet_sizes);
 
 static uint16_t packet_id = 1;
 
@@ -20,7 +30,7 @@ uint16_t get_new_packet_id(packet_type_t type)
 	if (packet_id >= UINT16_MAX - 16) /* small guard, avoid overflow */
 		packet_id = 1;
 	uint16_t id = (uint16_t)(packet_id + (uint16_t)type);
-	packet_id += 7;
+	packet_id += packet_types_count + 1;
 	return id;
 }
 
@@ -35,7 +45,6 @@ void packet_begin(packet_t* packet, packet_type_t type, uint16_t packet_id)
 	packet->header.packet_id = packet_id;
 }
 
-/* write helpers already used byte-wise, they cast to uint8_t* */
 void packet_write_u32(packet_t* packet, uint32_t value)
 {
 	memcpy((uint8_t*)packet->payload.buffer + packet->payload.index,
@@ -111,7 +120,29 @@ static int recv_all(int sock, void* ptr, size_t size, int flags)
 	return 0;
 }
 
-void packet_send(packet_t* packet, int sock)
+typedef struct {
+	packet_t* packet;
+	int socket;
+} packet_queue_t;
+
+static packet_queue_t* packet_queue_list = 0;
+static mutex_t send_packet_process;
+static char send_packet_process_mutex_initialied = 0;
+static atomic_int packet_sending_locked = 0;
+
+void packet_lock_sending(void)
+{
+	while(!atomic_load(&packet_sending_locked))
+		atomic_store(&packet_sending_locked, 1);
+}
+
+void packet_unlock_sending(void)
+{
+	assert(atomic_load(&packet_sending_locked));
+	atomic_store(&packet_sending_locked, 0);
+}
+
+static void _packet_send(packet_t* packet, int sock)
 {
 	if (send_all(sock, &packet->header, sizeof(packet_header_t), 0) < 0)
 	{
@@ -131,6 +162,86 @@ void packet_send(packet_t* packet, int sock)
 			return;
 		}
 	}
+}
+
+static void _send_any_queued_packet(void)
+{
+	int c = vector_get_count(packet_queue_list);
+	if (c > 0)
+	{
+		for (int i = 0; i < c; i++)
+		{
+			_packet_send(packet_queue_list[i].packet, packet_queue_list[i].socket);
+			packet_destroy(packet_queue_list[i].packet);
+			free(packet_queue_list[i].packet);
+		}
+	}
+}
+
+static void _clone_packet(packet_t* dst_packet, packet_t* src_packet)
+{
+	memcpy(dst_packet, src_packet, sizeof(packet_t));
+	packet_begin(dst_packet, src_packet->header.type, src_packet->header.packet_id);
+	memcpy(dst_packet->payload.buffer, src_packet->payload.buffer, sizeof(packet_t));
+
+	for (int i = 0; i < src_packet->payload.chunk_length; i++)
+	{
+		if (src_packet->payload.chunks[i].own_memory)
+		{
+			if (src_packet->payload.chunks[i].ptr)
+			{
+				void* ptr = malloc(src_packet->payload.chunks[i].size);
+				if (!ptr)
+				{
+					assert(ptr);
+					return;
+				}
+				memcpy(ptr, src_packet->payload.chunks[i].ptr, src_packet->payload.chunks[i].size);
+				data_append(dst_packet, ptr, src_packet->payload.chunks[i].size, 1);
+			}
+		}
+	}
+}
+
+static void _append_packet_to_queue(packet_t* packet, int sock)
+{
+	packet_t* _packet = malloc(sizeof(packet_t));
+	_clone_packet(_packet, packet);
+	packet_queue_t queue = { .packet = _packet, .socket = sock };
+	vector_put(packet_queue_list, queue);
+}
+
+void packet_send(packet_t* packet, int sock)
+{
+	{
+		if (!send_packet_process_mutex_initialied)
+		{
+			mutex_init(&send_packet_process);
+			send_packet_process_mutex_initialied = 1;
+		}
+
+		mutex_lock(&send_packet_process);
+
+		if (!packet_queue_list)
+		{
+			vector_init(packet_queue_list, 5);
+		}
+
+		if (atomic_load(&packet_sending_locked))
+		{
+			_append_packet_to_queue(packet, sock);
+			return;
+		}
+		else
+		{
+			_send_any_queued_packet();
+			_packet_send(packet, sock);
+			vector_free(packet_queue_list);
+		}
+
+		mutex_unlock(&send_packet_process);
+	}
+	
 }
 
 void packet_destroy(packet_t* packet)
@@ -249,6 +360,15 @@ static void quit_recv_handel(int sock, packet_t* packet)
 	data_append(packet, username, packet->payload.buffer->quit.username_length, 1);
 }
 
+static void listen_recv_handel(int sock, packet_t* packet)
+{
+	
+}
+static void empty_recv_handel(int sock, packet_t* packet)
+{
+	
+}
+
 packet_recv_handeler recv_handel[] =
 {
 	login_recv_handel,
@@ -256,7 +376,9 @@ packet_recv_handeler recv_handel[] =
 	chat_recv_handel,
 	file_recv_handel,
 	image_recv_handel,
-	quit_recv_handel
+	quit_recv_handel,
+	listen_recv_handel,
+	empty_recv_handel
 };
 
 void packet_recv(int sock, packet_t* packet)
@@ -268,10 +390,9 @@ void packet_recv(int sock, packet_t* packet)
 		return;
 	}
 
-	/* validate type index before using it */
 	if ((size_t)packet->header.type >= (sizeof(packet_sizes) / sizeof(packet_sizes[0])))
 	{
-		/* unknown packet type -> drop or handle as desired */
+		
 		return;
 	}
 
@@ -544,6 +665,30 @@ void packet_send_quit(int* sock, size_t sock_len, uint32_t uid, const char* user
 	packet_write_u64(&packet, uid);
 	packet_write_u32(&packet, (uint32_t)username_len);
 	packet_append(&packet, username, username_len);
+	for (size_t i = 0; i < sock_len; i++)
+	{
+		packet_send(&packet, sock[i]);
+	}
+	packet_destroy(&packet);
+}
+
+void packet_send_listen(int* sock, size_t sock_len, uint32_t uid)
+{
+	packet_t packet;
+	packet_begin(&packet, PKT_LISTEN, get_new_packet_id(PKT_LISTEN));
+	packet_write_u64(&packet, uid);
+	for (size_t i = 0; i < sock_len; i++)
+	{
+		packet_send(&packet, sock[i]);
+	}
+	packet_destroy(&packet);
+}
+
+void packet_send_empty(int* sock, size_t sock_len, uint32_t uid)
+{
+	packet_t packet;
+	packet_begin(&packet, PKT_EMPTY, get_new_packet_id(PKT_EMPTY));
+	packet_write_u64(&packet, uid);
 	for (size_t i = 0; i < sock_len; i++)
 	{
 		packet_send(&packet, sock[i]);

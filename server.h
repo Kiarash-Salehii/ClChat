@@ -19,6 +19,7 @@
 #include "terminal.h"
 #include "logger.h"
 #include "net_interface.h"
+#include "tui_selector.h"
 
 #ifdef __cplusplus
 extern "C" {

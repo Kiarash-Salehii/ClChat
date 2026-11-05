@@ -45,52 +45,52 @@ static void* linux_thread_start(void* arg)
     return NULL;
 }
 
-thread_result_t thread_begin(thread_t* Thread, THREADCALLBACK func, size_t numArgs, ...)
+thread_result_t thread_begin(thread_t* Thread, THREADCALLBACK func, void* user_data)
 {
     if (Thread == NULL) return THREAD_FAILED;
     if (func == NULL) return THREAD_FAILED;
     memset(Thread, 0, sizeof(thread_t));
 
-    void** data = NULL;
-    if (numArgs != 0)
-    {
-        va_list list;
-        va_start(list, numArgs);
-        if (numArgs > 1) {
-            data = calloc(numArgs, sizeof(void*));
-            for (size_t i = 0; i < numArgs; ++i) {
-                void* val = va_arg(list, void*);
-                data[i] = val;
-            }
-        } else {
-            /* single argument: store the pointer itself (not an array) */
-            void* single = va_arg(list, void*);
-            data = malloc(sizeof(void*));
-            data[0] = single;
-        }
-        va_end(list);
-    }
-    else
-    {
-        data = calloc(1, sizeof(void*));
-    }
+    //void** data = NULL;
+    //if (numArgs != 0)
+    //{
+    //    va_list list;
+    //    va_start(list, numArgs);
+    //    if (numArgs > 1) {
+    //        data = calloc(numArgs, sizeof(void*));
+    //        for (size_t i = 0; i < numArgs; ++i) {
+    //            void* val = va_arg(list, void*);
+    //            data[i] = val;
+    //        }
+    //    } else {
+    //        /* single argument: store the pointer itself (not an array) */
+    //        void* single = va_arg(list, void*);
+    //        data = malloc(sizeof(void*));
+    //        data[0] = single;
+    //    }
+    //    va_end(list);
+    //}
+    //else
+    //{
+    //    data = calloc(1, sizeof(void*));
+    //}
 
     Thread->callback = func;
-    Thread->user_data = data;
+    Thread->user_data = user_data;
 
     /* package callback + user_data for the pthread start routine */
     linux_thread_wrap* wrap = malloc(sizeof(*wrap));
     if (!wrap) {
-        free(data);
+        //free(data);
         return THREAD_FAILED;
     }
     wrap->cb = func;
-    wrap->user_data = data;
+    wrap->user_data = user_data;
 
     pthread_t* tid = malloc(sizeof(pthread_t));
     if (!tid) {
         free(wrap);
-        free(data);
+        //free(data);
         return THREAD_FAILED;
     }
 
@@ -98,7 +98,7 @@ thread_result_t thread_begin(thread_t* Thread, THREADCALLBACK func, size_t numAr
     if (r != 0) {
         free(tid);
         free(wrap);
-        free(data);
+        //free(data);
         return THREAD_FAILED;
     }
 

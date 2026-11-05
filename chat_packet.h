@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+
 #include "chat_core.h"
-#include "mutex.h"
 #include "image.h"
 
 #ifndef _CHAT_PACKET_H_
@@ -24,7 +24,8 @@ extern "C"
         PKT_FILE,
         PKT_IMAGE,
         PKT_QUIT,
-        PKT_CUSTOM_INFO,
+        PKT_LISTEN,
+        PKT_EMPTY,
         PKT_NULL
     } packet_type_t;
 
@@ -78,6 +79,16 @@ extern "C"
         uint32_t username_length;
     } quit_packet_t;
 
+    typedef struct
+    {
+        uint64_t user_id;
+    } listen_packet_t;
+
+    typedef struct
+    {
+        uint64_t user_id;
+    } empty_packet_t;
+
     typedef union
     {
         login_packet_t login;
@@ -86,6 +97,8 @@ extern "C"
         file_packet_t file;
         image_packet_t image;
         quit_packet_t quit;
+        listen_packet_t listen;
+        empty_packet_t empty;
     } union_payload_variables;
 
     typedef struct
@@ -111,6 +124,8 @@ extern "C"
     void packet_write_u32(packet_t* packet, uint32_t u32);
     void packet_write_u64(packet_t* packet, uint64_t u64);
     void packet_append(packet_t* packet, const void* ptr, size_t size);
+    void packet_lock_sending(void);
+    void packet_unlock_sending(void);
     void packet_send(packet_t* packet, int sock);
     void packet_destroy(packet_t* packet);
     void packet_recv(int sock, packet_t* packet);
@@ -120,6 +135,8 @@ extern "C"
     void packet_send_file(int* sock, size_t sock_len, uint32_t uid, FILE* file, const char* file_name, size_t file_name_len, uint8_t bool_stream_file, size_t stream_buffer_size);
     void packet_send_image(int* sock, size_t sock_len, uint32_t uid, FILE* file, uint8_t bool_stream_file, size_t stream_buffer_size);
     void packet_send_quit(int* sock, size_t sock_len, uint32_t uid, const char* username, size_t username_len);
+    void packet_send_listen(int* sock, size_t sock_len, uint32_t uid);
+    void packet_send_empty(int* sock, size_t sock_len, uint32_t uid);
 #ifdef __cplusplus
 }
 #endif

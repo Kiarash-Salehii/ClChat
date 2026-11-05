@@ -47,42 +47,42 @@ thread_result_t thread_resume(thread_t* Thread)
     return (e != (DWORD)-1) ? THREAD_SUCCESS : THREAD_FAILED;
 }
 
-thread_result_t thread_begin(thread_t* Thread, THREADCALLBACK func, size_t numArgs, ...)
+thread_result_t thread_begin(thread_t* Thread, THREADCALLBACK func, void* user_data)
 {
 	if(Thread == 0) return THREAD_FAILED;
 	if(func == (void*)0) return THREAD_FAILED;
     memset(Thread, 0, sizeof(thread_t));
 	
-    void** data = NULL;
-    if (numArgs != 0)
-    {
-        va_list list;
-        va_start(list, numArgs);
-        if (numArgs > 1) {
-            data = calloc(numArgs, sizeof(void*));
-            for (size_t i = 0; i < numArgs; ++i) {
-                void* val = va_arg(list, void*);
-                data[i] = val;
-            }
-        }
-        else {
-            /* single argument: store the pointer itself (not an array) */
-            void* single = va_arg(list, void*);
-            data = malloc(sizeof(void*));
-            data[0] = single;
-        }
-        va_end(list);
-    }
-    else
-    {
-        data = calloc(1, sizeof(void*));
-    }
+    //void** data = NULL;
+    //if (numArgs != 0)
+    //{
+    //    va_list list;
+    //    va_start(list, numArgs);
+    //    if (numArgs > 1) {
+    //        data = calloc(numArgs, sizeof(void*));
+    //        for (size_t i = 0; i < numArgs; ++i) {
+    //            void* val = va_arg(list, void*);
+    //            data[i] = val;
+    //        }
+    //    }
+    //    else {
+    //        /* single argument: store the pointer itself (not an array) */
+    //        void* single = va_arg(list, void*);
+    //        data = malloc(sizeof(void*));
+    //        data[0] = single;
+    //    }
+    //    va_end(list);
+    //}
+    //else
+    //{
+    //    data = calloc(1, sizeof(void*));
+    //}
 	
 	
 
     Thread->callback = func;
-	Thread->user_data = data;
-	Thread->id = (HANDLE)_beginthread(func, 0, data);
+	Thread->user_data = user_data;
+	Thread->id = (HANDLE)_beginthread(func, 0, user_data);
     return (Thread->id == (void*)0) ? THREAD_FAILED : THREAD_SUCCESS;
 }
 

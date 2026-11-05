@@ -58,8 +58,6 @@ static uint32_t get_address()
 	return address;
 }
 
-int net_get_local_address(char**);
-
 static uint64_t hash(uint8_t* str, uint32_t str_len)
 {
 	unsigned long hash = 5381;
@@ -91,9 +89,9 @@ typedef struct
 
 static mutex_t server_mutex;
 
-static void server_reciver_thread_call(void* arg)
+static void server_reciver_thread_call(void** arg)
 {
-	server_thread_wraper_t* wrap = ((void**)arg)[0];
+	server_thread_wraper_t* wrap = arg;
 	packet_t packet;
 	_key_t escaper[] = { '\r', '\n', KEY_ESCAPE };
 	while (1)
@@ -134,8 +132,13 @@ static void server_reciver_thread_call(void* arg)
 			rewind(stdin);
 			if (local_users[i].sock > 0)
 			{
+				packet_send_listen(&local_users[i].sock, 1, 0);
 				memset(&packet, 0, sizeof(packet_t));
 				packet_recv(local_users[i].sock, &packet);
+				if (packet.header.type == PKT_EMPTY)
+				{
+					continue;
+				}
 				if (packet.header.type == PKT_CHAT)
 				{
 					int user_index = -1;
@@ -350,11 +353,11 @@ static void server_reciver_thread_call(void* arg)
 	}
 }
 
-static void server_sender_thread_call(void* arg)
+static void server_sender_thread_call(void** arg)
 {
-	server_thread_wraper_t* wrap = ((void**)arg)[0];
+	server_thread_wraper_t* wrap = arg;
 
-	print_color("1- [c]hat.\n2- send [f]ile.\n3- send [i]mage.\n4- [q]uit.\n", CLR_BLUE, CLR_BG_BLACK);
+	print_color("1- [c]hat.\n2- send [f]ile.\n3- send [i]mage.\n4- [q]uit.\n5- i[n]fo\n6- [e]dit\n", CLR_BLUE, CLR_BG_BLACK);
 	char buffer[2048];
 	_key_t escaper_key[] = { '\n', KEY_ESCAPE, '\r' };
 	while (1)
@@ -438,38 +441,6 @@ static void server_sender_thread_call(void* arg)
 				}
 
 				packet_send_file(sockets, user_count_snapshot, 0, file, file_name, filename_len, 1, FILE_STREAMING_BUFFER_SIZE);
-				//fseek(file, 0, SEEK_END);
-				//size_t file_size = ftell(file);
-				//rewind(file);
-				//if (file_size == 0)
-				//{
-				//	print_color("zero byte file size.\n", CLR_BRIGHT_RED, CLR_BG_BLACK);
-				//	fclose(file);
-				//	continue;
-				//}
-
-				//void* file_data = malloc(file_size);
-				//size_t read_size = fread(file_data, 1, file_size, file);
-				//fclose(file);
-				//if (read_size != file_size)
-				//{
-				//	printf_color("read data size doesn't match the file size. file size : %ld -- read size : %ld\n", CLR_RED, CLR_BG_BLACK, file_size, read_size);
-				//	free(file_data);
-				//	continue;
-				//}
-
-				//packet_t packet;
-				//packet_begin(&packet, PKT_FILE, get_new_packet_id(PKT_FILE));
-				//packet_write_u64(&packet, 0);
-				//packet_write_u32(&packet, (uint32_t)filename_len);
-				//packet_write_u32(&packet, (uint32_t)file_size);
-				//packet_append(&packet, file_name, (uint32_t)filename_len);
-				//packet_append(&packet, file_data, (uint32_t)file_size);
-
-				///* snapshot sockets under lock then release before sending */
-				//
-				//free(file_data);
-				//packet_destroy(&packet);
 				break;
 			}
 			case 'i':
@@ -493,59 +464,29 @@ static void server_sender_thread_call(void* arg)
 				}
 
 				packet_send_image(sockets, user_count_snapshot, 0, file, 1, FILE_STREAMING_BUFFER_SIZE);
-				/*fseek(file, 0, SEEK_END);
-				size_t file_size = ftell(file);
-				rewind(file);
-				if (file_size == 0)
-				{
-					print_color("0 byte file size.\n", CLR_RED, CLR_BG_BLACK);
-					fclose(file);
-					continue;
-				}
-
-				void* file_data = malloc(file_size);
-				size_t read_size = fread(file_data, 1, file_size, file);
-				fclose(file);
-				if (read_size != file_size)
-				{
-					printf_color("read data size doesn't match the file size. file size : %ld -- read size : %ld\n", CLR_RED, CLR_BG_BLACK, file_size, read_size);
-					free(file_data);
-					continue;
-				}
-
-				uint32_t extension_length = 0;
-				char* extension = 0;
-
-				for (int i = path_len - 1; i > 0; i--)
-				{
-					if (buffer[i] != 0 || buffer[i] != ' ')
-						++extension_length;
-					if (buffer[i] == '.')
-					{
-						extension = &buffer[i + 1];
-						break;
-					}
-				}
-
-				packet_t packet;
-				packet_begin(&packet, PKT_IMAGE, get_new_packet_id(PKT_IMAGE));
-				packet_write_u64(&packet, 0);
-				packet_write_u32(&packet, (uint32_t)file_size);
-				packet_write_u32(&packet, extension_length);
-				packet_append(&packet, file_data, (uint32_t)file_size);
-				packet_append(&packet, extension, extension_length);
-
-				for (uint32_t i = 0; i < user_count_snapshot_i; ++i)
-					packet_send(&packet, sockets_i[i]);
-
-				free(sockets_i);
-				free(file_data);
-				packet_destroy(&packet);*/
 				break;
 			}
 			case 'q':
 			{
 				packet_send_quit(sockets, user_count_snapshot, 0, "ADMIN", 5);
+				break;
+			}
+			case 'n':
+			{
+				const char* info[] =
+				{
+					"ip : ",
+						"port : ",
+						"connection protocol : http/https",
+						"num of messages : ",
+						"number of users : ",
+						"pin : ",
+						"admins : .. ",
+						"user names : ...",
+						"user ips : ",
+				};
+				
+				int service_selected = tui_seletor(info, sizeof(info) / sizeof(info[0]), ' ', 1);
 				break;
 			}
 			case EOF:
@@ -648,13 +589,14 @@ int create_server(void)
 		return mutex_r;
 	}
 
-	server_thread_wraper_t server_wrap = { 0 };
-	server_wrap.users = &users;
-	server_wrap.user_count = &users_count;
-	server_wrap.room_alive = &room_alive;
+	server_thread_wraper_t* server_wrap = malloc(sizeof(server_thread_wraper_t));
+	memset(server_wrap, 0, sizeof(server_thread_wraper_t));
+	server_wrap->users = &users;
+	server_wrap->user_count = &users_count;
+	server_wrap->room_alive = &room_alive;
 	thread_t sender_thread, reciver_thread;
-	thread_begin(&sender_thread, (THREADCALLBACK)server_sender_thread_call, 1, &server_wrap);
-	thread_begin(&reciver_thread, (THREADCALLBACK)server_reciver_thread_call, 1, &server_wrap);
+	thread_begin(&sender_thread, (THREADCALLBACK)server_sender_thread_call, server_wrap);
+	thread_begin(&reciver_thread, (THREADCALLBACK)server_reciver_thread_call, server_wrap);
 	while (1)
 	{
 		mutex_lock(&server_mutex);
@@ -739,6 +681,8 @@ int create_server(void)
 			perror("accept");
 		}
 	}
+
+	free(server_wrap);
 
 	mutex_lock(&server_mutex);
 	for (int i = 0; i < users_count; i++)

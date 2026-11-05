@@ -79,39 +79,6 @@ void clear_line()
 	}
 }
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-
-typedef int sock_close_t;
-static int socket_init(void)
-{
-	WSADATA wsa;
-	return (WSAStartup(MAKEWORD(2, 2), &wsa) == 0) ? 0 : -1;
-}
-static void socket_cleanup(void)
-{
-	WSACleanup();
-}
-static void close_socket(int s)
-{
-	if (s != INVALID_SOCKET) closesocket((SOCKET)s);
-}
-#else
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <unistd.h>
-
-typedef int SOCKET;
-static int socket_init(void) { return 0; }
-static void socket_cleanup(void) { (void)0; }
-static void close_socket(int s) { if (s >= 0) close(s); }
-#endif
-
 void termination_signal(int sig)
 {
 	putc('\n', stdout);
@@ -122,10 +89,10 @@ void termination_signal(int sig)
 
 	exit(sig);
 }
+#include "tui_selector.h"
 
 int main(int argc, char **args)
 {
-
 	if (logger_init() != 0)
 	{
 		fprintf(stderr, "Failed to initialize logger\n");
@@ -146,18 +113,20 @@ int main(int argc, char **args)
 	uint8_t exit = 0;
 	while(!exit)
 	{
-		char service_selected[10];
-		logger_prompt_gets(service_selected, sizeof(service_selected), escape_key, 2, "Hello and welcome to clchat.\n\
-	Here you can create your own server and have your friend connect to you\n\
-	Or you can have your friend became the server and easily connect throw the code that he/she gave u\n\
-	1 - Connect to a room\n\
-	2 - Create a room\n\
-	choose an service and then press enter to continue : ");
-		
-		int service_num;
-		(void)sscanf(service_selected, "%d", &service_num);
+		int service_selected;
+		print_color("Hello and welcome to clchat.\n\
+Here you can create your own server and have your friend connect to you\n\
+Or you can have your friend became the server and easily connect throw the code that he/she gave u\n\
+choose an service and then press enter to continue : \n", CLR_BRIGHT_GREEN, CLR_BG_BLACK);
+
+		const char* services[] =
+		{
+			"Connect to a room",
+			"Create a room"
+		};
+		service_selected = tui_seletor(services, 2, '>', 3);
 		terminal_clear();
-		if (service_num == 1)
+		if (service_selected == 0)
 		{
 			if (client_connect() < 0)
 			{
@@ -165,7 +134,7 @@ int main(int argc, char **args)
 				exit = 1;
 			}
 		}
-		else if (service_num == 2)
+		else if (service_selected == 1)
 		{
 			if (create_server() < 0)
 			{

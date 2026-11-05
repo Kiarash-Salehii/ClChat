@@ -1,39 +1,5 @@
 #include "client.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-
-typedef int sock_close_t;
-static int socket_init(void)
-{
-	WSADATA wsa;
-	return (WSAStartup(MAKEWORD(2, 2), &wsa) == 0) ? 0 : -1;
-}
-static void socket_cleanup(void)
-{
-	WSACleanup();
-}
-static void close_socket(int s)
-{
-	if (s != INVALID_SOCKET) closesocket((SOCKET)s);
-}
-#else
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <unistd.h>
-
-typedef int SOCKET;
-static int socket_init(void) { return 0; }
-static void socket_cleanup(void) { (void)0; }
-static void close_socket(int s) { if (s >= 0) close(s); }
-#endif
-
-
 typedef struct
 {
 	uint8_t* connection_alive;
@@ -42,11 +8,17 @@ typedef struct
 	int sock;
 } client_thread_wraper_t;
 
-mutex_t client_mutex;
+static mutex_t client_mutex;
+static atomic_int listening;
+
+typedef struct {
+	packet_t packet;
+	int index;
+};
 
 void client_sender_thread_call(void* arg)
 {
-	client_thread_wraper_t* wrap = (client_thread_wraper_t*)((void**)arg)[0];
+	client_thread_wraper_t* wrap = arg;
 
 	print_color("1- [c]hat.\n2- send [f]ile.\n3- send [i]mage.\n4- [q]uit.\n", CLR_BLUE, CLR_BG_BLACK);
 
@@ -79,8 +51,9 @@ void client_sender_thread_call(void* arg)
 
 				/* strip newline */
 				size_t len = strlen(buffer);
-
+				
 				packet_send_chat(&wrap->sock, 1, wrap->user_id, buffer, len);
+				
 				break;
 			}
 			case 'f':
@@ -244,9 +217,6 @@ int client_connect(void)
 		return -1;
 	}
 
-	//debug log only
-	logger_printf("connected to the server.\n");
-
 	packet_t login;
 	packet_begin(&login, PKT_LOGIN, get_new_packet_id(PKT_LOGIN));
 	packet_write_u32(&login, (uint32_t)room_pin);
@@ -286,7 +256,7 @@ int client_connect(void)
 	thread_wrap_data.user_id = user_id;
 	thread_wrap_data.username = username;
 	thread_t sender_thread;
-	thread_begin(&sender_thread, (THREADCALLBACK)client_sender_thread_call, 1, &thread_wrap_data);
+	thread_begin(&sender_thread, (THREADCALLBACK)client_sender_thread_call, &thread_wrap_data);
 	packet_t packet;
 	memset(&packet, 0, sizeof(packet));
 	while (1)
